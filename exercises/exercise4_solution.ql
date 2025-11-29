@@ -17,5 +17,10 @@ class ObjectInputReadCall extends MethodCall {
 }
 
 from ObjectInputReadCall call
-where ...
-select ...
+where
+  not call.getEnclosingCallable().getDeclaringType() instanceof ObjectInputClass and
+  not call.getLocation().getFile().getRelativePath().matches("%/src/test/%")
+select 
+  call,
+  call.getEnclosingCallable(),
+  call.getEnclosingCallable().getDeclaringType()

@@ -2,6 +2,15 @@
 
 5th and 6th October 2021
 
+## :new: 2025 UPDATE :cool:  
+
+The repository has been updated to address several areas:
+- Updated README.md and workshop.md to reflect changes in files.
+- Updated exercise files to clearly differentiate between template files and solutions.
+- Technical fixes include:
+    - `MethodAccess` becoming [deprecated](https://codeql.github.com/codeql-standard-libraries/java/type.@methodaccess.html) in favour of `MethodCall`
+    - `TaintTracking` and `DataFlow` syntax changes as per [here](https://github.blog/changelog/2023-08-13-new-dataflow-api-for-writing-custom-codeql-queries/).
+
 ## Preparation
 
 For this workshop, you are invited to actively participate by writing CodeQL queries in Visual Studio Code. To do this, you will need to have Visual Studio Code up and running.
@@ -15,6 +24,10 @@ For this workshop, you are invited to actively participate by writing CodeQL que
 ```
 git clone --recursive https://github.com/github/codeql-dubbo-workshop.git
 ```
+> [!IMPORTANT]
+> It is crucial to keep the CodeQL standard libraries up to date with the CodeQL CLI binary, therefore you should update the `codeql` submodule to bump the versions as necessary.  
+> This can be achieved by running `git submodule update --remote`
+
 
 3. Open the repository folder in Visual Studio Code.
 

@@ -27,23 +27,7 @@ class NotifyListenerNotifyMethod extends Method {
   }
 }
 
-class DubboListener extends RemoteFlowSource {
-  DubboListener() {
-    (exists(NotifyListenerNotifyMethod m |
-        this.asParameter() = m.getAParameter()
-      ) or
-      exists(ConfigurationListenerProcessMethod m |
-        this.asParameter() = m.getAParameter() 
-      )) and
-      not this.getLocation().getFile().getRelativePath().matches("%/src/test/%")
-  }
-  override string getSourceType() { result = "Dubbo Listener Source" }
-}
-  
-from DubboListener l
-select 
-  l,
-  l.asParameter().getCallable(),
-  l.asParameter().getCallable().getDeclaringType()
-
+from ...
+where ...
+select ...
 

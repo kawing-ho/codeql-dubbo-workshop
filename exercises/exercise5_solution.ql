@@ -15,5 +15,11 @@ class JavaBeanSerializeUtilDeserializeMethod extends Method {
 }
 
 from MethodCall ma
-where ...
-select ..
+where
+  (
+    ma.getMethod() instanceof PojoUtilsRealizeMethod or 
+    ma.getMethod() instanceof JavaBeanSerializeUtilDeserializeMethod
+  ) and
+  not ma.getEnclosingCallable().getDeclaringType() = ma.getMethod().getDeclaringType() and
+  not ma.getLocation().getFile().getRelativePath().matches("%/src/test/%")
+select ma, ma.getEnclosingCallable().getDeclaringType()

@@ -2,7 +2,7 @@ import java
 import semmle.code.java.dataflow.FlowSources
 
 /** A call to the method `stream` declared in a collection type. */
-class CollectionStreamCall extends MethodAccess {
+class CollectionStreamCall extends MethodCall {
     CollectionStreamCall() { this.getMethod().(CollectionMethod).getName() = "stream" }
 }
 
@@ -27,7 +27,7 @@ class StreamMethod extends Method {
 }
 
 /** A call to the method `collect` declared in a stream type. */
-class StreamCollectCall extends MethodAccess {
+class StreamCollectCall extends MethodCall {
     StreamCollectCall() { this.getMethod().(StreamMethod).getName() = "collect" }
 }
 
@@ -42,14 +42,14 @@ class StreamCollectTaintStep extends TaintTracking::AdditionalTaintStep {
 }
 
 /** A call to the method `filter` declared in a stream type. */
-class StreamFilterCall extends MethodAccess {
+class StreamFilterCall extends MethodCall {
 StreamFilterCall() { this.getMethod().(StreamMethod).getName() = "filter" }
 }
 
 /** Track taint from `stream` to `stream.filter(lambda)`. */
 class StreamFilterTaintStep extends TaintTracking::AdditionalTaintStep {
 override predicate step(DataFlow::Node n1, DataFlow::Node n2) {
-    exists(MethodAccess ma |
+    exists(MethodCall ma |
     ma instanceof StreamFilterCall and
     n1.asExpr() = ma.getQualifier() and
     n2.asExpr() = ma

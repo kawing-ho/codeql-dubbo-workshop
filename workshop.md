@@ -23,7 +23,7 @@ Here are some hints.
 
 # Setup
 
-Follow the instructions in the [README](README.md) - you want to have [this repository](https://github.com/CodeQLWorkshops/DubboWorkshop) open in Visual Studio Code. Make sure that the extension and CodeQL CLI are the latest versions.
+Follow the instructions in the [README](README.md) - you want to have [this repository](https://github.com/kawing-ho/codeql-dubbo-workshop) open in Visual Studio Code. Make sure that the extension and CodeQL CLI are the latest versions.
 
 The databases are included in the snapshot in the [databases](databases/) folder. You can also create your own databases using the CodeQL CLI.
 
@@ -32,7 +32,7 @@ If you already cloned the repo, `git pull` to get the latest changes.
 # Exercise 1: Find the Dubbo attack surface known to CodeQL
 
 - Find all sources in Dubbo codebase
-- Exclude those ones with paths matching */src/test/*
+- Exclude the ones with paths matching */src/test/*
 - Select the source, enclosing class and source type
 
 You should get 10 results.
@@ -206,7 +206,7 @@ select
 * Explore autocomplete
 * Explore pop-up help
 * Jump to the QL class definition
-* Use the AST viewer. Right-click on any Ruby code and select "CodeQL: View AST".
+* Use the AST viewer. Right-click on any Java code and select "CodeQL: View AST".
 * Look at query history
 
 # Exercise 3: Variant analysis (Taint Tracking)
@@ -219,6 +219,9 @@ You should get 8 results.
 <details>
 <summary>Hints</summary>
 
+- A method call is represented with `MethodCall` (previously `MethodAccess`)  in CodeQL
+- `instanceof` operator allows you to enforce CodeQL classes
+- This [reference](https://codeql.github.com/docs/codeql-language-guides/analyzing-data-flow-in-java/#using-global-taint-tracking) may help!
 - A `TaintTracking` query boilerplate:
 
 ```ql
@@ -227,26 +230,27 @@ You should get 8 results.
  */
 import java
 import semmle.code.java.dataflow.TaintTracking
-import DataFlow::PathGraph
 
-class MyConfig extends TaintTracking::Configuration {
-  MyConfig() { this = "MyConfig" }
+module InsecureConfig implements DataFlow::ConfigSig {
 
-  override predicate isSource(DataFlow::Node source) {
+  predicate isSource(DataFlow::Node source) {
     ...
   }
 
-  override predicate isSink(DataFlow::Node sink) {
+  predicate isSink(DataFlow::Node sink) {
     ...
   }
 
-  override predicate isAdditionalTaintStep(DataFlow::Node n1, DataFlow::Node n2) {
+  predicate isAdditionalFlowStep(DataFlow::Node n1, DataFlow::Node n2) {
     ...
   }
 }
 
-from MyConfig conf, DataFlow::PathNode source, DataFlow::PathNode sink
-where conf.hasFlowPath(source, sink)
+module InsecureFlow = TaintTracking::Global<InsecureConfig>;
+import InsecureFlow::PathGraph
+
+from InsecureFlow::PathNode source, InsecureFlow::PathNode sink
+where InsecureFlow::flowPath(source, sink)
 select sink, source, sink, "dataflow was found"
 ```
 
@@ -277,9 +281,6 @@ class SerializationDeserializeMethod extends Method {
 }
 ```
 
-- A method call is represented with `MethodAccess` in CodeQL
-- `instanceof` operator allows you to enforce CodeQL classes
-
 </details>
 
 <details>
@@ -291,8 +292,6 @@ class SerializationDeserializeMethod extends Method {
  */
 import java
 import semmle.code.java.dataflow.TaintTracking
-import DataFlow::PathGraph
-
 
 class DubboCodecDecodeBodyMethod extends Method {
   DubboCodecDecodeBodyMethod() {
@@ -317,24 +316,23 @@ class SerializationDeserializeMethod extends Method {
   }
 }
 
-class InsecureConfig extends TaintTracking::Configuration {
-  InsecureConfig() { this = "InsecureConfig" }
+module InsecureConfig implements DataFlow::ConfigSig {
 
-  override predicate isSource(DataFlow::Node source) {
+  predicate isSource(DataFlow::Node source) {
     exists(DubboCodecDecodeBodyMethod m |
-      m.getParameter(1) = source.asParameter()
+      m.getParameter([1,2]) = source.asParameter()
      )
   }
 
-  override predicate isSink(DataFlow::Node sink) {
-    exists(MethodAccess ma |
+  predicate isSink(DataFlow::Node sink) {
+    exists(MethodCall ma |
       ma.getMethod() instanceof ObjectInputReadMethod and
       ma.getQualifier() = sink.asExpr()
     )
   }
 
-  override predicate isAdditionalTaintStep(DataFlow::Node n1, DataFlow::Node n2) {
-    exists(MethodAccess ma |
+  predicate isAdditionalFlowStep(DataFlow::Node n1, DataFlow::Node n2) {
+    exists(MethodCall ma |
       ma.getMethod() instanceof SerializationDeserializeMethod and
       ma.getArgument(1) = n1.asExpr() and
       ma = n2.asExpr()
@@ -342,8 +340,11 @@ class InsecureConfig extends TaintTracking::Configuration {
   }
 }
 
-from InsecureConfig conf, DataFlow::PathNode source, DataFlow::PathNode sink
-where conf.hasFlowPath(source, sink)
+module InsecureFlow = TaintTracking::Global<InsecureConfig>;
+import InsecureFlow::PathGraph
+
+from InsecureFlow::PathNode source, InsecureFlow::PathNode sink 
+where InsecureFlow::flowPath(source, sink)
 select sink, source, sink, "unsafe deserialization"
 ```
 
@@ -374,7 +375,7 @@ class ObjectInputClass extends RefType {
 - Model calls to `ObjectInput.read*` method with a class
  
 ```ql
-class ObjectInputReadCall extends MethodAccess {
+class ObjectInputReadCall extends MethodCall {
   ObjectInputReadCall() {
     ..
   }
@@ -395,7 +396,7 @@ class ObjectInputClass extends RefType {
   }
 }
 
-class ObjectInputReadCall extends MethodAccess {
+class ObjectInputReadCall extends MethodCall {
   ObjectInputReadCall() {
     exists(Method m |
       this.getMethod() = m and
@@ -422,7 +423,7 @@ select
 - Find (semantically) all uses of:
   - `PojoUtil.realize()`
   - `JavaBeanSerializeUtil.deserialize()`
-- As usual exclude results on test files
+- Exclude calls on files with a path matching `*/src/test/*`
 
 This should give 9 results.
 
@@ -470,7 +471,7 @@ class JavaBeanSerializeUtilDeserializeMethod extends Method {
   }
 }
 
-from MethodAccess ma
+from MethodCall ma
 where
   (
     ma.getMethod() instanceof PojoUtilsRealizeMethod or 
@@ -485,9 +486,10 @@ select ma, ma.getEnclosingCallable().getDeclaringType()
 
 # Exercise 6: Semantic sinks heatmap  
 
-- Find all calls to an unsafe deserialization sinks known to CodeQL
+- Find all calls to unsafe deserialization sinks known to CodeQL
 - Reuse `UnsafeDeserializationSink` class from `semmle.code.java.security.UnsafeDeserializationQuery`
 - Select sink class, method and call enclosing class
+- Exclude calls on files with a path matching `*/src/test/*`
 
 This should give 23 results.
 
@@ -531,6 +533,7 @@ select
 - Model Dubbo Registry abstraction as a new source
 - Model Dubbo Configuration Center abstraction as a new source
 - List all these new sources
+- Exclude calls on files with a path matching `*/src/test/*`
 
 There should be 10 results.
 
@@ -627,20 +630,7 @@ select
 # Exercise 8: Script Injection
 
 - Reuse [`ScriptInjection`](https://github.com/github/codeql/blob/main/java/ql/src/experimental/Security/CWE/CWE-094/ScriptInjection.ql) query
-- Add sources from exercise 7
-- Add a new TaintStep for `URL` methods:
-```ql
-class URLTaintStep extends TaintTracking::AdditionalTaintStep {
-    override predicate step(DataFlow::Node n1, DataFlow::Node n2) {
-        exists(MethodAccess ma |
-            ma.getMethod().getName().matches("get%") and
-            ma.getMethod().getDeclaringType().hasQualifiedName("org.apache.dubbo.common", "URL") and
-            n1.asExpr() = ma.getQualifier() and
-            n2.asExpr() = ma
-        )
-    }
-}
-```
+- Add Dubbo sources from exercise 7 and a new TaintStep for `URL` methods by importing local `dubbo.qll` file
 - Import local `models.qll` file to bring some unmerged library taint steps
 
 There should be 2 results.
@@ -663,9 +653,8 @@ There should be 2 results.
 
 import java
 import semmle.code.java.dataflow.FlowSources
-import DataFlow::PathGraph
-import models
-import dubbo
+import dubbo // from dubbo.qll
+import models // from models.qll
 
 /** A method of ScriptEngine that allows code injection. */
 class ScriptEngineMethod extends Method {
@@ -726,7 +715,7 @@ class RhinoDefineClassMethod extends Method {
  * Holds if `ma` is a call to a `ScriptEngineMethod` and `sink` is an argument that
  * will be executed.
  */
-predicate isScriptArgument(MethodAccess ma, Expr sink) {
+predicate isScriptArgument(MethodCall ma, Expr sink) {
   exists(ScriptEngineMethod m |
     m = ma.getMethod() and
     if m.getDeclaringType().getASupertype*().hasQualifiedName("javax.script", "ScriptEngineFactory")
@@ -738,14 +727,14 @@ predicate isScriptArgument(MethodAccess ma, Expr sink) {
 /**
  * Holds if a Rhino expression evaluation method is vulnerable to code injection.
  */
-predicate evaluatesRhinoExpression(MethodAccess ma, Expr sink) {
+predicate evaluatesRhinoExpression(MethodCall ma, Expr sink) {
   exists(RhinoEvaluateExpressionMethod m | m = ma.getMethod() |
     (
       if ma.getMethod().getName() = "compileReader"
       then sink = ma.getArgument(0) // The first argument is the input reader
       else sink = ma.getArgument(1) // The second argument is the JavaScript or Java input
     ) and
-    not exists(MethodAccess ca |
+    not exists(MethodCall ca |
       ca.getMethod().hasName(["initSafeStandardObjects", "setClassShutter"]) and // safe mode or `ClassShutter` constraint is enforced
       ma.getQualifier() = ca.getQualifier().(VarAccess).getVariable().getAnAccess()
     )
@@ -755,20 +744,20 @@ predicate evaluatesRhinoExpression(MethodAccess ma, Expr sink) {
 /**
  * Holds if a Rhino expression compilation method is vulnerable to code injection.
  */
-predicate compilesScript(MethodAccess ma, Expr sink) {
+predicate compilesScript(MethodCall ma, Expr sink) {
   exists(RhinoCompileClassMethod m | m = ma.getMethod() | sink = ma.getArgument(0))
 }
 
 /**
  * Holds if a Rhino class loading method is vulnerable to code injection.
  */
-predicate definesRhinoClass(MethodAccess ma, Expr sink) {
+predicate definesRhinoClass(MethodCall ma, Expr sink) {
   exists(RhinoDefineClassMethod m | m = ma.getMethod() | sink = ma.getArgument(1))
 }
 
 /** A script injection sink. */
 class ScriptInjectionSink extends DataFlow::ExprNode {
-  MethodAccess methodAccess;
+  MethodCall methodAccess;
 
   ScriptInjectionSink() {
     isScriptArgument(methodAccess, this.getExpr()) or
@@ -778,28 +767,30 @@ class ScriptInjectionSink extends DataFlow::ExprNode {
   }
 
   /** An access to the method associated with this sink. */
-  MethodAccess getMethodAccess() { result = methodAccess }
+  MethodCall getMethodCall() { result = methodAccess }
 }
 
 /**
  * A taint tracking configuration that tracks flow from `RemoteFlowSource` to an argument
  * of a method call that executes injected script.
  */
-class ScriptInjectionConfiguration extends TaintTracking::Configuration {
-  ScriptInjectionConfiguration() { this = "ScriptInjectionConfiguration" }
+module ScriptInjectionConfig implements DataFlow::ConfigSig {
 
-  override predicate isSource(DataFlow::Node source) {
+  predicate isSource(DataFlow::Node source) {
     source instanceof RemoteFlowSource
    }
 
-  override predicate isSink(DataFlow::Node sink) {
+  predicate isSink(DataFlow::Node sink) {
     sink instanceof ScriptInjectionSink
   }
 }
 
-from DataFlow::PathNode source, DataFlow::PathNode sink, ScriptInjectionConfiguration conf
-where conf.hasFlowPath(source, sink)
-select sink.getNode().(ScriptInjectionSink).getMethodAccess(), source, sink,
+module ScriptInjectionFlow = TaintTracking::Global<ScriptInjectionConfig>;
+import ScriptInjectionFlow::PathGraph
+
+from ScriptInjectionFlow::PathNode source, ScriptInjectionFlow::PathNode sink 
+where ScriptInjectionFlow::flowPath(source, sink)
+select sink.getNode().(ScriptInjectionSink).getMethodCall(), source, sink,
   "Java Script Engine evaluate $@.", source.getNode(), "user input"
 ```
 

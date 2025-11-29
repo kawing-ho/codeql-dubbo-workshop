@@ -1,3 +1,3 @@
 import java
 
-select "Hola, EkoParty!"
+select "Hello, World!"

@@ -52,5 +52,13 @@ class DecodeSource extends RemoteFlowSource {
 }
 
 from RemoteFlowSource source
-where ...
-select ...
+where
+  (
+    source instanceof ChannelReadSource or
+    source instanceof DecodeSource
+  ) and
+  not source.getLocation().getFile().getRelativePath().matches("%/src/test/%")
+select
+  source,
+  source.getEnclosingCallable().getDeclaringType(),
+  source.getSourceType()

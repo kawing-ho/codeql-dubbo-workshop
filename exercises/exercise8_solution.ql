@@ -12,8 +12,8 @@
 
 import java
 import semmle.code.java.dataflow.FlowSources
-import ...
-import ...
+import dubbo // from dubbo.qll
+import models // from models.qll
 
 /** A method of ScriptEngine that allows code injection. */
 class ScriptEngineMethod extends Method {
@@ -136,17 +136,19 @@ class ScriptInjectionSink extends DataFlow::ExprNode {
 module ScriptInjectionConfig implements DataFlow::ConfigSig {
 
   predicate isSource(DataFlow::Node source) {
-    ...
+    source instanceof RemoteFlowSource
    }
 
   predicate isSink(DataFlow::Node sink) {
-    ...
+    sink instanceof ScriptInjectionSink
   }
 }
 
 module ScriptInjectionFlow = TaintTracking::Global<ScriptInjectionConfig>;
 import ScriptInjectionFlow::PathGraph
 
-from ...
-where ...
-select ...
+from ScriptInjectionFlow::PathNode source, ScriptInjectionFlow::PathNode sink 
+where ScriptInjectionFlow::flowPath(source, sink)
+select sink.getNode().(ScriptInjectionSink).getMethodCall(), source, sink,
+  "Java Script Engine evaluate $@.", source.getNode(), "user input"
+
